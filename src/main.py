@@ -10,7 +10,7 @@ from keras.optimizers import SGD
 n_data_chn = 32
 n_label_chn = 6
 
-def load_data(seg_len, lite=False):
+def load_data(subjs, seg_len, dataset="train"):
 	# DATA
 	# id,Fp1,Fp2,F7,F3,Fz,F4,F8,FC5,FC1,FC2,FC6,T7,C3,Cz,C4,T8,TP9,CP5,CP1,CP2,CP6,TP10,P7,P3,Pz,P4,P8,PO9,O1,Oz,O2,PO10
 	# subj10_series1_0,
@@ -23,13 +23,19 @@ def load_data(seg_len, lite=False):
 	# id,HandStart,FirstDigitTouch,BothStartLoadPhase,LiftOff,Replace,BothReleased
 	# subj1_series1_0,	0,0,1,0,0,0
 	# subj1_series1_1,	0,0,2,0,9,0
-	if not lite:
-		data_list = os.listdir('../data/train/data')
-		label_list = os.listdir('../data/train/label')
+	if dataset == 'train':
+		tests = range(1,9)
 	else:
-		data_list = os.listdir('../data_lite/train/data')
-		label_list = os.listdir('../data_lite/train/label')
-
+		tests = range(9,11)
+	data_list = [
+		'subj%d_series%d_data.csv'%(s, t)  
+		for s in subjs for t in tests
+		]
+	label_list = [
+		'subj%d_series%d_events.csv'%(s, t)
+		for s in subjs for t in tests
+		]
+	
 	data_segs = []
 	for data_file in data_list:
 		data = pd.read_csv(open(os.path.join('../data/train/data', data_file)))
@@ -43,6 +49,7 @@ def load_data(seg_len, lite=False):
 		for i in range(0, label.shape[0] / seg_len):
 			label_segs.append(label[i * seg_len:(i+1) * seg_len, :])
 
+	assert data.shape[0] == label.shape[0], 'Data and label length don\'t match'
 	n_segs = len(data_segs)
 	raw_data = np.empty((n_segs, 1, seg_len, n_data_chn))
 	raw_labels = np.empty((n_segs, 1, seg_len, n_label_chn))
@@ -54,9 +61,6 @@ def load_data(seg_len, lite=False):
 	raw_labels = raw_labels.swapaxes(1, 3)
 
 	return raw_data, raw_labels
-
-def evaluate(pred, label):
-	return np.sqrt(np.mean(np.sqr(pred - label)))
 
 def train(train_data, train_label):
 	model = Sequential()
@@ -76,17 +80,19 @@ def train(train_data, train_label):
 	train_label = train_label[:,:,9:-1:2,:]
 	train_label = train_label[:,:,2:,:]
 
-	for i in range(30):
-		model.fit(
-			train_data, train_label, 
-			batch_size=100, nb_epoch=1, 
-			shuffle=False, verbose=1,
-			validation_split=0.2)
-		print "Run #%d" % i
-		model.save_weights('./model/train_%d_epochs.model' % (i*20))
+	model.fit(
+		train_data, train_label, 
+		batch_size=100, nb_epoch=1, 
+		shuffle=False, verbose=1,
+		validation_split=0.2)
+	print "Run #%d" % i
+	model.save_weights('./model/train_%d_epochs.model' % (i*20))
 
 
 if __name__ == "__main__":
 	seg_len = 2000
-	data, label = load_data(seg_len, lite=True)
-	train(data, label)
+	for run in range(10):
+		print "Run #%d" % run
+		for i in range(1,13,2):
+			data, label = load_data(range(i,i+2), seg_len)
+		train(data, label)
